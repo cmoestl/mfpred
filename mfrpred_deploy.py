@@ -20,8 +20,18 @@
 # 
 # - continous deployment, look at results during CMEs
 # - assess progression of results in real time as more of the CME is seen
+# - needs different trained model for each timestep, i.e. for different hours after sheath and MFR entry?
 # 
+# ### Future
+# - forecast of the cumulative southward Bz during a geomagnetic storm?
+# - start at time of shock, and then decrease the error bars with time
+# - correlate with Dst
 # 
+# pattern recognition
+# https://agupubs.onlinelibrary.wiley.com/doi/10.1002/2016SW001589
+# 
+# bz after shocks
+# https://agupubs.onlinelibrary.wiley.com/doi/10.1029/2018SW002056
 # 
 # #### Authors: 
 # M.A. Reiss (1), C. Möstl (2), R.L. Bailey (3), and U. Amerstorfer (2), Emma Davies (2), Eva Weiler (2)
@@ -31,7 +41,7 @@
 # (3) Conrad Observatory, GeoSphere Austria
 # 
 
-# In[24]:
+# In[34]:
 
 
 # Python Modules and Packages
@@ -94,7 +104,7 @@ if sys.platform =='darwin':
 
 # ## load real time data
 
-# In[25]:
+# In[35]:
 
 
 filenoaa='noaa_rtsw_last_35files_now.p'
@@ -114,7 +124,7 @@ ind2=np.where(sta.time > start)[0][0]
 sta=sta[ind2:]
 
 
-# In[26]:
+# In[36]:
 
 
 ###plot NOAA
@@ -145,9 +155,57 @@ plt.grid(True)  # Adding a grid
 plt.xlim(start, end)
 
 
+# In[ ]:
+
+
+
+
+
+# In[38]:
+
+
+#cutout last 10 hours, e.g. sheath is over and flux rope starts
+start=datetime.datetime.utcnow() - datetime.timedelta(hours=10)
+end=datetime.datetime.utcnow() 
+
+ind=np.where(noaa.time > start)[0][0]
+noaa_cut=noaa[ind:]
+
+ind2=np.where(sta.time > start)[0][0]
+sta_cut=sta[ind2:]
+
+###plot NOAA
+plt.figure(1,figsize=(12, 4))
+plt.plot(noaa_cut.time,noaa_cut.bz, '-b',lw=0.5)
+plt.plot(noaa_cut.time,noaa_cut.bt,'-k')
+
+plt.title("NOAA RTSW")  # Adding a title
+plt.xlabel("time")  # Adding X axis label
+plt.ylabel("B [nT]")  # Adding Y axis label
+plt.legend()  # Adding a legend
+plt.grid(True)  # Adding a grid
+
+plt.xlim(start, end)
+
+#plot STEREO-A
+
+plt.figure(2,figsize=(12, 4))
+plt.plot(sta_cut.time,sta_cut.bz, '-b',lw=0.5)
+plt.plot(sta_cut.time,sta_cut.bt,'-k')
+
+plt.title("STEREO-A beacon")  # Adding a title
+plt.xlabel("time")  # Adding X axis label
+plt.ylabel("B [nT]")  # Adding Y axis label
+plt.legend()  # Adding a legend
+plt.grid(True)  # Adding a grid
+
+plt.xlim(start, end)
+
+
+
 # ### load ML model
 
-# In[33]:
+# In[39]:
 
 
 #what the model numbers mean
@@ -171,7 +229,7 @@ model2
 # ### Apply ML model
 # 
 
-# In[28]:
+# In[40]:
 
 
 ## how to apply, first calculate features from current data? and then put into model
@@ -181,6 +239,44 @@ model2
 
 
 # ### Make output data files and plots
+
+# In[ ]:
+
+
+
+
+
+# In[ ]:
+
+
+
+
+
+# ### General Bz overview plots
+
+# In[ ]:
+
+
+
+
+
+# In[ ]:
+
+
+
+
+
+# In[ ]:
+
+
+
+
+
+# In[ ]:
+
+
+
+
 
 # In[ ]:
 
