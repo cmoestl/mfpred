@@ -28,6 +28,7 @@
 # - update insitu for ML data files until 2024 with new matplotlib date format, much more events! Wind from 1995
 # - retrain the model with new ICMECAT and new data files with this notebook, for 1, 2,3,4, 5, 6,7,8, 9, 10, 12, 15 hours
 # - read the trained model file in with mfrpred_deploy.ipynb and apply to real time data
+# - check warnings
 # 
 
 # In[1]:
@@ -55,7 +56,7 @@ print('use sheath', use_sheath)
       
 
 
-# In[40]:
+# In[41]:
 
 
 # Python Modules and Packages
@@ -96,8 +97,8 @@ from sklearn.tree import DecisionTreeRegressor
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 
 # Don't print warnings
-#import warnings
-#warnings.filterwarnings('ignore')
+import warnings
+warnings.filterwarnings('ignore')
 
 # Print versions
 #print('Current Versions')
