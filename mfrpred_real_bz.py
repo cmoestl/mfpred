@@ -5,14 +5,40 @@
 # 
 # Coronal mass ejections continually interact with Earth's space weather environment driving geomagnetic storm activity. The severity of geomagnetic storms is determined by the magnetic flux rope structure in the coronal mass ejections. Predicting the flux rope structure is however an open question in the community. Here we study if the in situ signature in the sheath region contains sufficient information for predicting the magnetic flux rope field in coronal mass ejections. Further, we quantify how much time is needed inside the flux rope to predict the mean total magnetic field of the flux rope with high accuracy. To do so, we use widely-applied machine learning algorithms such as linear regression, lars lasso, and random forest. We train, test, and validate these algorithms on coronal mass ejections in retrospective real-time mode for the Wind, Stereo-A, and Stereo-B mission data in the HELCATS CME catalog. 
 # 
-# #### Contributors: 
-# M.A. Reiss, C. Möstl, R.L. Bailey, and U. Amerstorfer (NASA CCMC, Austrian Space Weather Office, Conrad Observatory, GeoSphere Austria)
+# #### Authors: 
+# M.A. Reiss (1), C. Möstl (2), R.L. Bailey (3), and U. Amerstorfer (2), Emma Davies (2), Eva Weiler (2)
+# 
+# (1) NASA CCMC, 
+# (2) Austrian Space Weather Office, GeoSphere Austria
+# (3) Conrad Observatory, GeoSphere Austria
 # 
 # #### Solar wind data:
 # Copy Version 8 from https://figshare.com/articles/dataset/Solar_wind_in_situ_data_suitable_for_machine_learning_python_numpy_arrays_STEREO-A_B_Wind_Parker_Solar_Probe_Ulysses_Venus_Express_MESSENGER/12058065
 # into the folder /data.
+# 
+# ### Update
+# last update 2024 Sep 11.
+# 
+# ### Issues
+# 
+# - update insitu for ML data files until 2024 with new matplotlib date format, much more events! Wind from 1995
+# - retrain the model with new ICMECAT, new data files
+# - write trained model into pickle, read in with mfrpred_deploy.ipynb
+# 
 
 # In[1]:
+
+
+#### control parameters
+
+# Set time window for features in hours
+feature_hours = 0 #10
+
+# Decide if you want to include the sheath region. 
+use_sheath = True
+
+
+# In[2]:
 
 
 # Python Modules and Packages
@@ -21,12 +47,14 @@ import sys
 import copy
 import matplotlib.pyplot as plt
 from matplotlib.dates import date2num, num2date
+import matplotlib.dates as mdates
 from matplotlib import cm
 import numpy as np
 import pickle
 from scipy import stats
 import scipy.io
 import time
+import datetime
 
 # Visualisation
 import sunpy.time
@@ -64,14 +92,32 @@ print(sns.__version__)#0.9.0
 import PIL
 print(PIL.__version__)#8.1.2
 
-os.system('jupyter nbconvert --to script mfrpred_mreiss_bz.ipynb')    
+os.system('jupyter nbconvert --to script mfrpred_real_bz.ipynb')    
+
+
+#get data paths
+if sys.platform == 'linux': 
+    
+    from config_server import data_path
+    from config_server import noaa_path
+    from config_server import wind_path
+    from config_server import stereoa_path
+    from config_server import data_path_ml
+    
+if sys.platform =='darwin':  
+
+    from config_local import data_path
+    from config_local import noaa_path
+    from config_local import wind_path
+    from config_local import stereoa_path
+    from config_local import data_path_ml
 
 
 # ## 1. Data preparation
 
 # #### File and folder variables:
 
-# In[2]:
+# In[3]:
 
 
 # Make plots and results folders
@@ -89,12 +135,12 @@ savepath_sta = 'sta_features.p'
 savepath_stb = 'stb_features.p'
 
 
-# #### Load HELCATS ICME data catalog
+# #### Load HELIO4CAST ICME data catalog
 
-# In[3]:
+# In[4]:
 
 
-[ic,header,parameters] = pickle.load(open('data/HELIO4CAST_ICMECAT_v21_pandas.p', "rb" ))
+[ic,header,parameters] = pickle.load(open('data/ICMECAT/HELIO4CAST_ICMECAT_v22_pandas.p', "rb" ))
 
 # Spacecraft
 isc = ic.loc[:,'sc_insitu'] 
@@ -125,22 +171,32 @@ vexi=np.where(ic.sc_insitu=='VEX')[0]
 
 # #### Load spacecraft data
 
-# In[4]:
+# In[5]:
 
 
 # Load Wind data
-[win, winheader] = pickle.load(open("data/wind_1995_2021_heeq_ndarray.p", "rb"))
+[win, winheader] = pickle.load(open("data/insitu/wind_2007_2021_heeq_ndarray.p", "rb"))
 
 # Load STEREO-A data
-[sta, atta] = pickle.load(open("data/stereoa_2007_2021_sceq_ndarray.p", "rb"))
+[sta, atta] = pickle.load(open("data/insitu/stereoa_2007_2021_sceq_ndarray.p", "rb"))
 
 # Load STEREO-B data
-[stb, attb, stbheader] = pickle.load(open("data/stereob_2007_2014_sceq_ndarray.p", "rb"))
+[stb, attb, stbheader] = pickle.load(open("data/insitu/stereob_2007_2014_sceq_ndarray.p", "rb"))
+
+
+## quick fix for dates - need to make new data files for ML with heliocats package
+
+win['time']=win['time'] + mdates.date2num(np.datetime64('0000-12-31'))
+sta['time']=sta['time'] + mdates.date2num(np.datetime64('0000-12-31'))
+stb['time']=stb['time'] + mdates.date2num(np.datetime64('0000-12-31'))
+
 
 
 # #### Convert spacecraft data to dataframe
+# 
+# add vt*bz and bt**2
 
-# In[5]:
+# In[11]:
 
 
 # Wind
@@ -183,7 +239,7 @@ stb = stb_data
 
 # #### Study only events with a sheath region
 
-# In[6]:
+# In[12]:
 
 
 # Event indices from STEREO and Wind
@@ -216,14 +272,8 @@ print('Percentage of all events',np.round((n_iwinind.shape[0] + n_istaind.shape[
 
 # #### Timing windows for features and labels
 
-# In[7]:
+# In[13]:
 
-
-# Set time window for features in hours
-feature_hours = 0 #10
-
-# Decide if you want to include the sheath region. 
-use_sheath = True
 
 if use_sheath:
     print("Option 1: Use MFR and sheath data for features")
@@ -242,7 +292,7 @@ label_end = mo_end_time_num
 
 # #### Functions to compute features and labels
 
-# In[8]:
+# In[14]:
 
 
 # Compute mean, max and std-dev in feature time window
@@ -307,7 +357,7 @@ def get_label(sc_time, start_time, end_time, sc_ind, sc_label, label_type="max")
 
 # #### Create data frame for features and labels
 
-# In[9]:
+# In[15]:
 
 
 #contains all events that are finally selected
@@ -413,7 +463,7 @@ else:
 
 # #### Clean the data frame by removing NaNs 
 
-# In[10]:
+# In[16]:
 
 
 #get original indices of the 362 events
@@ -429,7 +479,7 @@ print(len(dfwin)+len(dfsta)+len(dfstb))
 print(len(win_select_ind)+len(sta_select_ind)+len(stb_select_ind))
 
 
-# In[11]:
+# In[17]:
 
 
 print(len(dfwin))
@@ -443,6 +493,10 @@ len_dfstb_nans = len(dfstb)
 
 print("Total number of events  ", len(dfwin)+len(dfsta)+len(dfstb))
 print()
+
+
+# In[18]:
+
 
 # Remove NaN's in data frames
 dfwin1 = dfwin.dropna()
@@ -472,7 +526,7 @@ n_all=np.hstack([win_select_ind1,sta_select_ind1,stb_select_ind1])
 print(len(n_all))
 
 
-# In[12]:
+# In[14]:
 
 
 # Define final dataframes
@@ -483,7 +537,7 @@ dfstb=dfstb1
 
 # ## Figure 1: ICME catalog 
 
-# In[13]:
+# In[15]:
 
 
 #markersize
@@ -542,7 +596,7 @@ print('Total:',np.size(win_select_ind1)+np.size(sta_select_ind1)+np.size(stb_sel
 
 # ## Figure 2: Parameter distribution plot 
 
-# In[14]:
+# In[16]:
 
 
 sns.set_context("talk")     
@@ -610,7 +664,7 @@ argv3 ='fig2_dist.png'
 plt.savefig('plots/' + argv3)
 
 
-# In[15]:
+# In[17]:
 
 
 print('Statistics for the final '+str(len(n_all))+' selected events with sheath:')
@@ -641,7 +695,7 @@ print("std MO Bzmin   : {:.2f} nT".format((ic.loc[n_all,'mo_bzmin'].std())))
 print()
 
 
-# In[22]:
+# In[18]:
 
 
 df = pd.concat([dfwin, dfsta, dfstb])
@@ -651,44 +705,40 @@ pickle.dump(df, open('riley2022/features_521_events_bz_target.p', "wb"))
 df
 
 
-# In[69]:
+# In[19]:
 
 
 df2=pickle.load(open('riley2022/features_521_events.p', "rb"))
 
 
-# In[18]:
-
-
-"""#Some tests...
-event_num = 5
-time_event = stb['time'][np.logical_and(stb['time'] > icme_start_time_num[n_istbind][event_num], stb['time'] < mo_start_time_num[n_istbind][event_num]+ feature_hours / 24.0)]
-prop_event = stb['bt'][np.logical_and(stb['time'] > icme_start_time_num[n_istbind][event_num], stb['time'] < mo_start_time_num[n_istbind][event_num]+ feature_hours / 24.0)]
-time_label = stb['time'][np.logical_and(stb['time'] > mo_start_time_num[n_istbind][event_num]+ feature_hours / 24.0, stb['time'] < mo_end_time_num[n_istbind][event_num])]
-prop_label = stb['bt'][np.logical_and(stb['time'] > mo_start_time_num[n_istbind][event_num]+ feature_hours / 24.0, stb['time'] < mo_end_time_num[n_istbind][event_num])]
-plt.plot(time_event,prop_event)
-plt.plot(time_label,prop_label)
-plt.scatter(icme_start_time_num[n_istbind][event_num],0.6, color='y')
-plt.axvline(icme_start_time_num[n_istbind][event_num], color='y')
-plt.scatter(mo_start_time_num[n_istbind][event_num],0.5, color='g')
-plt.scatter(mo_start_time_num[n_istbind][event_num] + feature_hours / 24.0,0.4, color='b')
-plt.scatter(mo_end_time_num[n_istbind][event_num],0.3, color='r')
-
-print(np.nanmean(prop_event))
-print(np.nanmax(prop_event))
-print(np.nanstd(prop_event))
-print(np.nanmin(prop_event))
-print(np.nanstd(prop_event)/np.nanmean(prop_event))
-print(np.nanmin(prop_event)/np.nanmax(prop_event))
-#print(np.nanmean(prop_label))stb
-"""
-
+# #Some tests...
+# event_num = 5
+# time_event = stb['time'][np.logical_and(stb['time'] > icme_start_time_num[n_istbind][event_num], stb['time'] < mo_start_time_num[n_istbind][event_num]+ feature_hours / 24.0)]
+# prop_event = stb['bt'][np.logical_and(stb['time'] > icme_start_time_num[n_istbind][event_num], stb['time'] < mo_start_time_num[n_istbind][event_num]+ feature_hours / 24.0)]
+# time_label = stb['time'][np.logical_and(stb['time'] > mo_start_time_num[n_istbind][event_num]+ feature_hours / 24.0, stb['time'] < mo_end_time_num[n_istbind][event_num])]
+# prop_label = stb['bt'][np.logical_and(stb['time'] > mo_start_time_num[n_istbind][event_num]+ feature_hours / 24.0, stb['time'] < mo_end_time_num[n_istbind][event_num])]
+# plt.plot(time_event,prop_event)
+# plt.plot(time_label,prop_label)
+# plt.scatter(icme_start_time_num[n_istbind][event_num],0.6, color='y')
+# plt.axvline(icme_start_time_num[n_istbind][event_num], color='y')
+# plt.scatter(mo_start_time_num[n_istbind][event_num],0.5, color='g')
+# plt.scatter(mo_start_time_num[n_istbind][event_num] + feature_hours / 24.0,0.4, color='b')
+# plt.scatter(mo_end_time_num[n_istbind][event_num],0.3, color='r')
+# 
+# print(np.nanmean(prop_event))
+# print(np.nanmax(prop_event))
+# print(np.nanstd(prop_event))
+# print(np.nanmin(prop_event))
+# print(np.nanstd(prop_event)/np.nanmean(prop_event))
+# print(np.nanmin(prop_event)/np.nanmax(prop_event))
+# #print(np.nanmean(prop_label))stb
+# """
 
 # ## 2. Machine Learning
 
 # #### Split data frame into training and testing
 
-# In[45]:
+# In[20]:
 
 
 # Testing data size in percent
@@ -718,7 +768,7 @@ test_ind = test.index.to_numpy()
 
 # #### Feature selection
 
-# In[20]:
+# In[ ]:
 
 
 # Select features
@@ -749,7 +799,7 @@ pickle.dump([n_iwinind, n_istaind, n_istbind,
 
 # #### Select algorithms for machine learning
 
-# In[21]:
+# In[ ]:
 
 
 # Define machine learning models
@@ -782,7 +832,7 @@ def evaluate_forecast(model, X, y, y_predict):
 
 # #### Test different machine learning algorithms
 
-# In[21]:
+# In[ ]:
 
 
 # Use pickle to load training and testing data
@@ -814,7 +864,7 @@ for name, model in models.items():
 
 # #### Validation of machine learning models
 
-# In[22]:
+# In[ ]:
 
 
 # Validate machine learning model on test data
@@ -828,7 +878,7 @@ for name, model in models.items():
 
 # #### Optimising model hyperparameters
 
-# In[23]:
+# In[ ]:
 
 
 # Set to True when you want to redo the Hyperparameter tuning - takes a few minutes
@@ -837,7 +887,7 @@ gridsearch = False
 from sklearn.model_selection import RandomizedSearchCV
 
 
-# In[24]:
+# In[ ]:
 
 
 if gridsearch:
@@ -869,7 +919,7 @@ cc1 = scipy.stats.pearsonr(np.squeeze(y_test), np.squeeze(y_pred1))[0]
 print("{:<10}{:6.2f}{:6.2f}".format('test', cc1, mae1))
 
 
-# In[25]:
+# In[ ]:
 
 
 if gridsearch:
@@ -901,7 +951,7 @@ cc1 = scipy.stats.pearsonr(np.squeeze(y_test), np.squeeze(y_pred1))[0]
 print("{:<10}{:6.2f}{:6.2f}".format('test', cc1, mae1))
 
 
-# In[26]:
+# In[ ]:
 
 
 # Select best models according to scores
@@ -914,7 +964,7 @@ y_pred2 = model2.predict(X_test)
 y_pred3 = model3.predict(X_test)
 
 
-# In[27]:
+# In[ ]:
 
 
 importances = model3.feature_importances_
@@ -940,7 +990,7 @@ plt.savefig('plots/' + argv3, bbox_inches='tight')
 plt.show()
 
 
-# In[28]:
+# In[ ]:
 
 
 # (n, 1) -- (n,)
@@ -952,7 +1002,7 @@ y_pred3 = np.squeeze(y_pred3)
 #y_pred1 = y_pred1.reshape(-1,1)
 
 
-# In[29]:
+# In[ ]:
 
 
 # Create scatter density plots for different models
@@ -968,7 +1018,7 @@ z = gaussian_kde(xy)(xy)
 idx = z.argsort()
 x, y, z = x[idx], y[idx], z[idx]
 
-ax1.scatter(x, y, c=z, s=50, edgecolor='')
+ax1.scatter(x, y, c=z, s=50, edgecolor=None)
 ax1.set_xlim([2,-25])
 ax1.set_ylim([2,-25])
 ax1.set_aspect('equal', 'box')
@@ -988,7 +1038,7 @@ z = gaussian_kde(xy)(xy)
 idx = z.argsort()
 x, y, z = x[idx], y[idx], z[idx]
 
-ax2.scatter(x, y, c=z, s=50, edgecolor='')
+ax2.scatter(x, y, c=z, s=50, edgecolor=None)
 ax2.set_xlim([2,-25])
 ax2.set_ylim([2,-25])
 ax2.set_aspect('equal', 'box')
@@ -1009,7 +1059,7 @@ idx = z.argsort()
 x, y, z = x[idx], y[idx], z[idx]
 
 ax3.plot([-100, 100],[-100, 100], ls=":")
-ax3.scatter(x, y, c=z, s=50, edgecolor='')
+ax3.scatter(x, y, c=z, s=50, edgecolor=None)
 ax3.set_xlim([2,-25])
 ax3.set_ylim([2,-25])
 ax3.set_aspect('equal', 'box')
@@ -1043,10 +1093,8 @@ plt.show()
 
 # #### Point-to-point comparison metrics
 
-# In[30]:
+# In[ ]:
 
-
-import sklearn
 
 def meanError(mod, obs):
     me = obs.mean() - mod.mean()
@@ -1148,6 +1196,7 @@ print('min($B_{z}$)','&','RFR','&','{:.2f}'.format(np.mean(y_pred2)),'&','{:.2f}
 print('min($B_{z}$)','&','GBR','&','{:.2f}'.format(np.mean(y_pred3)),'&','{:.2f}'.format(np.std(y_pred3)), '&' 
      '{:.2f}'.format(me3), '&', '{:.2f}'.format(mae3), '&', '{:.2f}'.format(rmse3), '&', '{:.2f}'.format(ss3), '&', '{:.2f}'.format(pcc3),'\\\\')
 
+
 # Save results as np array
 argv3='bz_{}h_error_measures'.format(feature_hours)  
 res_array = np.array([[me1, mae1, mse1, rmse1, ss1, pcc1], [me2, mae2, mse2, rmse2, ss2, pcc2], [me3, mae3, mse3, rmse3, ss3, pcc3]])
@@ -1157,7 +1206,7 @@ np.save('mfr_results/' + 'bz_values', obs)
 
 # #### Binary metrics
 
-# In[31]:
+# In[ ]:
 
 
 # 2. Binary Metrics 
@@ -1266,7 +1315,7 @@ np.save('mfr_results/' + argv3, res_array)
 
 # #### Illustrate the effect of time window on the results
 
-# In[32]:
+# In[ ]:
 
 
 d_metrics_mae = {'lr': [], 'rfr': [], 'gbr': []}
@@ -1322,7 +1371,7 @@ plt.show()
 
 # ## 3. Real-world Applications
 
-# In[33]:
+# In[ ]:
 
 
 from matplotlib.dates import DateFormatter
@@ -1378,7 +1427,7 @@ def plot_all_mos(sat, n_ind, start_range, end_range, satname, varstr='min'):
     plt.show()
 
 
-# In[34]:
+# In[ ]:
 
 
 #Ideal example
@@ -1386,21 +1435,21 @@ y_pred = y_pred3
 plot_all_mos(win, n_iwinind, 2, 3, 'Wind')
 
 
-# In[35]:
+# In[ ]:
 
 
 #Average example
 plot_all_mos(win, n_iwinind, 0, 1, 'Wind')
 
 
-# In[36]:
+# In[ ]:
 
 
 #Poor example
 plot_all_mos(win, n_iwinind, 17, 18, 'Wind')
 
 
-# In[34]:
+# In[ ]:
 
 
 #y_pred = y_pred2
@@ -1410,4 +1459,16 @@ plot_all_mos(win, n_iwinind, 17, 18, 'Wind')
 #plot_all_mos(sta, n_istaind, start_range, end_range, 'STEREO-A')
 #start_range, end_range = len(win_test_ind) + len(sta_test_ind), len(test_ind)
 #plot_all_mos(stb, n_istbind, start_range, end_range, 'STEREO-B')
+
+
+# In[ ]:
+
+
+
+
+
+# In[ ]:
+
+
+
 
