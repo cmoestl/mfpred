@@ -17,7 +17,7 @@
 # (3) Conrad Observatory, GeoSphere Austria
 # 
 # #### Solar wind data:
-# Copy Version 8 from https://figshare.com/articles/dataset/Solar_wind_in_situ_data_suitable_for_machine_learning_python_numpy_arrays_STEREO-A_B_Wind_Parker_Solar_Probe_Ulysses_Venus_Express_MESSENGER/12058065
+# Copy Version 10 from https://figshare.com/articles/dataset/Solar_wind_in_situ_data_suitable_for_machine_learning_python_numpy_arrays_STEREO-A_B_Wind_Parker_Solar_Probe_Ulysses_Venus_Express_MESSENGER/12058065
 # into the folder /data.
 # 
 # ### Update
@@ -36,7 +36,7 @@
 #### control parameters
 
 # Set time window for features in hours
-feature_hours = 2 #10
+feature_hours = 8 #10
 
 # > 0 if you want to save the 3 models under folder trained_models/
 save_model=1 
@@ -46,16 +46,23 @@ use_sheath = True
 
 #list for last plot showing progression with window, which hours after sheath were already computed, look into folder mfr_results
 
-th_list=[1,5,10]
+th_list=[1,2,5,8,10]
+
+print('feature hours: ',feature_hours)
+print('save model', save_model)
+print('use sheath', use_sheath)
+
+      
 
 
-# In[2]:
+# In[40]:
 
 
 # Python Modules and Packages
 import os
 import sys
 import copy
+import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.dates import date2num, num2date
 import matplotlib.dates as mdates
@@ -66,6 +73,8 @@ from scipy import stats
 import scipy.io
 import time
 import datetime
+import sklearn
+import PIL
 
 # Visualisation
 import sunpy.time
@@ -87,24 +96,20 @@ from sklearn.tree import DecisionTreeRegressor
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 
 # Don't print warnings
-import warnings
-warnings.filterwarnings('ignore')
+#import warnings
+#warnings.filterwarnings('ignore')
 
 # Print versions
-print('Current Versions')
-import matplotlib
-print(np.__version__)#==1.17.2
-print(matplotlib.__version__)#3.1.2
-print(scipy.__version__)#1.3.1
-print(pd.__version__)#0.25.3
-import sklearn
-print(sklearn.__version__)#0.20.3
-print(sns.__version__)#0.9.0
-import PIL
-print(PIL.__version__)#8.1.2
+#print('Current Versions')
+#print(np.__version__)#==1.17.2
+#print(matplotlib.__version__)#3.1.2
+#print(scipy.__version__)#1.3.1
+#print(pd.__version__)#0.25.3
+#print(sklearn.__version__)#0.20.3
+#print(sns.__version__)#0.9.0
+#print(PIL.__version__)#8.1.2
 
 os.system('jupyter nbconvert --to script mfrpred_real_bz.ipynb')    
-
 
 #get data paths
 if sys.platform == 'linux': 
@@ -369,7 +374,7 @@ def get_label(sc_time, start_time, end_time, sc_ind, sc_label, label_type="max")
 
 # #### Create data frame for features and labels
 
-# In[ ]:
+# In[10]:
 
 
 #contains all events that are finally selected
@@ -475,7 +480,7 @@ else:
 
 # #### Clean the data frame by removing NaNs 
 
-# In[ ]:
+# In[11]:
 
 
 #get original indices of the 362 events
@@ -491,7 +496,7 @@ print(len(dfwin)+len(dfsta)+len(dfstb))
 print(len(win_select_ind)+len(sta_select_ind)+len(stb_select_ind))
 
 
-# In[ ]:
+# In[12]:
 
 
 print(len(dfwin))
@@ -507,7 +512,7 @@ print("Total number of events  ", len(dfwin)+len(dfsta)+len(dfstb))
 print()
 
 
-# In[ ]:
+# In[13]:
 
 
 # Remove NaN's in data frames
@@ -538,7 +543,7 @@ n_all=np.hstack([win_select_ind1,sta_select_ind1,stb_select_ind1])
 print(len(n_all))
 
 
-# In[ ]:
+# In[14]:
 
 
 # Define final dataframes
@@ -549,7 +554,7 @@ dfstb=dfstb1
 
 # ## Figure 1: ICME catalog 
 
-# In[ ]:
+# In[15]:
 
 
 #markersize
@@ -608,7 +613,7 @@ print('Total:',np.size(win_select_ind1)+np.size(sta_select_ind1)+np.size(stb_sel
 
 # ## Figure 2: Parameter distribution plot 
 
-# In[ ]:
+# In[16]:
 
 
 sns.set_context("talk")     
@@ -676,7 +681,7 @@ argv3 ='fig2_dist.png'
 plt.savefig('plots/' + argv3)
 
 
-# In[ ]:
+# In[17]:
 
 
 print('Statistics for the final '+str(len(n_all))+' selected events with sheath:')
@@ -707,7 +712,7 @@ print("std MO Bzmin   : {:.2f} nT".format((ic.loc[n_all,'mo_bzmin'].std())))
 print()
 
 
-# In[ ]:
+# In[18]:
 
 
 df = pd.concat([dfwin, dfsta, dfstb])
@@ -717,7 +722,7 @@ pickle.dump(df, open('riley2022/features_521_events_bz_target.p', "wb"))
 df
 
 
-# In[ ]:
+# In[19]:
 
 
 df2=pickle.load(open('riley2022/features_521_events.p', "rb"))
@@ -750,7 +755,7 @@ df2=pickle.load(open('riley2022/features_521_events.p', "rb"))
 
 # #### Split data frame into training and testing
 
-# In[ ]:
+# In[20]:
 
 
 # Testing data size in percent
@@ -780,7 +785,7 @@ test_ind = test.index.to_numpy()
 
 # #### Feature selection
 
-# In[ ]:
+# In[21]:
 
 
 # Select features
@@ -811,7 +816,7 @@ pickle.dump([n_iwinind, n_istaind, n_istbind,
 
 # #### Select algorithms for machine learning
 
-# In[ ]:
+# In[22]:
 
 
 # Define machine learning models
@@ -844,7 +849,7 @@ def evaluate_forecast(model, X, y, y_predict):
 
 # #### Test different machine learning algorithms
 
-# In[ ]:
+# In[23]:
 
 
 # Use pickle to load training and testing data
@@ -876,7 +881,7 @@ for name, model in models.items():
 
 # #### Validation of machine learning models
 
-# In[ ]:
+# In[24]:
 
 
 # Validate machine learning model on test data
@@ -890,7 +895,7 @@ for name, model in models.items():
 
 # #### Optimising model hyperparameters
 
-# In[ ]:
+# In[25]:
 
 
 # Set to True when you want to redo the Hyperparameter tuning - takes a few minutes
@@ -899,7 +904,7 @@ gridsearch = False
 from sklearn.model_selection import RandomizedSearchCV
 
 
-# In[ ]:
+# In[26]:
 
 
 if gridsearch:
@@ -931,7 +936,7 @@ cc1 = scipy.stats.pearsonr(np.squeeze(y_test), np.squeeze(y_pred1))[0]
 print("{:<10}{:6.2f}{:6.2f}".format('test', cc1, mae1))
 
 
-# In[ ]:
+# In[27]:
 
 
 if gridsearch:
@@ -965,7 +970,7 @@ print("{:<10}{:6.2f}{:6.2f}".format('test', cc1, mae1))
 
 # ### Save trained models for use in real time
 
-# In[ ]:
+# In[28]:
 
 
 model1 = models['lr'] 
@@ -978,7 +983,7 @@ if save_model > 0:
 
 # ### Select best models according to scores
 
-# In[ ]:
+# In[29]:
 
 
 #test with training data
@@ -1009,7 +1014,7 @@ plt.savefig('plots/' + argv3, bbox_inches='tight')
 plt.show()
 
 
-# In[ ]:
+# In[30]:
 
 
 # (n, 1) -- (n,)
@@ -1021,7 +1026,7 @@ y_pred3 = np.squeeze(y_pred3)
 #y_pred1 = y_pred1.reshape(-1,1)
 
 
-# In[ ]:
+# In[31]:
 
 
 # Create scatter density plots for different models
@@ -1112,7 +1117,7 @@ plt.show()
 
 # #### Point-to-point comparison metrics
 
-# In[ ]:
+# In[32]:
 
 
 def meanError(mod, obs):
@@ -1225,7 +1230,7 @@ np.save('mfr_results/' + 'bz_values', obs)
 
 # #### Binary metrics
 
-# In[ ]:
+# In[33]:
 
 
 # 2. Binary Metrics 
@@ -1334,7 +1339,7 @@ np.save('mfr_results/' + argv3, res_array)
 
 # #### Illustrate the effect of time window on the results
 
-# In[ ]:
+# In[34]:
 
 
 d_metrics_mae = {'lr': [], 'rfr': [], 'gbr': []}
@@ -1392,7 +1397,7 @@ plt.show()
 
 # ## 3. Real-world Applications
 
-# In[ ]:
+# In[35]:
 
 
 from matplotlib.dates import DateFormatter
@@ -1448,7 +1453,7 @@ def plot_all_mos(sat, n_ind, start_range, end_range, satname, varstr='min'):
     plt.show()
 
 
-# In[ ]:
+# In[36]:
 
 
 #Ideal example
@@ -1456,21 +1461,21 @@ y_pred = y_pred3
 plot_all_mos(win, n_iwinind, 2, 3, 'Wind')
 
 
-# In[ ]:
+# In[37]:
 
 
 #Average example
 plot_all_mos(win, n_iwinind, 0, 1, 'Wind')
 
 
-# In[ ]:
+# In[38]:
 
 
 #Poor example
 plot_all_mos(win, n_iwinind, 17, 18, 'Wind')
 
 
-# In[ ]:
+# In[39]:
 
 
 #y_pred = y_pred2

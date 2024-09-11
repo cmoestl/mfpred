@@ -34,7 +34,7 @@
 # - retrain the model with new ICMECAT and new data files with this notebook, for 1, 2,3,4, 5, 6,7,8, 9, 10, 12, 15 hours
 # - read the trained model file in with mfrpred_deploy.ipynb and apply to real time data
 
-# In[1]:
+# In[32]:
 
 
 #### control parameters
@@ -50,7 +50,12 @@ use_sheath = True
 
 #list for last plot showing progression with window, which hours after sheath were already computed, look into folder mfr_results
 
-th_list=[1,2,5,8,10]
+th_list=[8]
+
+
+print('feature hours: ',feature_hours)
+print('save model', save_model)
+print('use sheath', use_sheath)
 
 
 # In[2]:
@@ -59,6 +64,7 @@ th_list=[1,2,5,8,10]
 # Python Modules and Packages
 import os
 import sys
+import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.dates import date2num, num2date
 import matplotlib.dates as mdates
@@ -68,6 +74,8 @@ import pickle
 from scipy import stats
 import scipy.io
 import time
+import sklearn
+import PIL
 
 # Visualisation
 import sunpy.time
@@ -89,8 +97,9 @@ from sklearn.tree import DecisionTreeRegressor
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 
 # Don't print warnings
-import warnings
-warnings.filterwarnings('ignore')
+#import warnings
+#warnings.filterwarnings('ignore')
+
 os.system('jupyter nbconvert --to script mfrpred_real_btot.ipynb')    
 
 
@@ -311,7 +320,7 @@ def get_label(sc_time, start_time, end_time, sc_ind, sc_label, label_type="max")
 
 # #### Create data frame for features and labels
 
-# In[ ]:
+# In[9]:
 
 
 #contains all events that are finally selected
@@ -417,7 +426,7 @@ else:
 
 # #### Clean the data frame by removing NaNs 
 
-# In[ ]:
+# In[10]:
 
 
 #get original indices of the 362 events
@@ -433,7 +442,7 @@ print(len(dfwin)+len(dfsta)+len(dfstb))
 print(len(win_select_ind)+len(sta_select_ind)+len(stb_select_ind))
 
 
-# In[ ]:
+# In[11]:
 
 
 print(len(dfwin))
@@ -476,7 +485,7 @@ n_all=np.hstack([win_select_ind1,sta_select_ind1,stb_select_ind1])
 print(len(n_all))
 
 
-# In[ ]:
+# In[12]:
 
 
 ##reduce dataframes finally to selected events
@@ -485,7 +494,7 @@ dfsta=dfsta1
 dfstb=dfstb1
 
 
-# In[ ]:
+# In[13]:
 
 
 print('Statistics for the final '+str(len(n_all))+' selected events with sheath:')
@@ -515,7 +524,7 @@ print("std MO Bzmin   : {:.2f} nT".format((ic.loc[n_all,'mo_bzmin'].std())))
 print()
 
 
-# In[ ]:
+# In[14]:
 
 
 df = pd.concat([dfwin, dfsta, dfstb])
@@ -525,7 +534,7 @@ pickle.dump(df, open('riley2022/features_521_events_btot_target.p', "wb"))
 df
 
 
-# In[ ]:
+# In[15]:
 
 
 """#Some tests...
@@ -556,7 +565,7 @@ print(np.nanmin(prop_event)/np.nanmax(prop_event))
 
 # #### Split data frame into training and testing
 
-# In[ ]:
+# In[16]:
 
 
 # Testing data size in percent
@@ -590,7 +599,7 @@ test_ind = test.index.to_numpy()
 
 # #### Feature selection
 
-# In[ ]:
+# In[17]:
 
 
 # Select features
@@ -621,7 +630,7 @@ pickle.dump([n_iwinind, n_istaind, n_istbind,
 
 # #### Select algorithms for machine learning
 
-# In[ ]:
+# In[18]:
 
 
 # Define machine learning models
@@ -654,7 +663,7 @@ def evaluate_forecast(model, X, y, y_predict):
 
 # #### Test different machine learning algorithms
 
-# In[ ]:
+# In[19]:
 
 
 # Use pickle to load training and testing data
@@ -686,7 +695,7 @@ for name, model in models.items():
 
 # #### Validation of machine learning models
 
-# In[ ]:
+# In[20]:
 
 
 # Validate machine learning model on test data
@@ -700,7 +709,7 @@ for name, model in models.items():
 
 # #### Optimising model hyperparameters
 
-# In[ ]:
+# In[21]:
 
 
 # Set to True when you want to redo the Hyperparameter tuning - takes a few minutes
@@ -709,7 +718,7 @@ gridsearch = False
 from sklearn.model_selection import RandomizedSearchCV
 
 
-# In[ ]:
+# In[22]:
 
 
 if gridsearch:
@@ -741,7 +750,7 @@ cc1 = scipy.stats.pearsonr(np.squeeze(y_test), np.squeeze(y_pred1))[0]
 print("{:<10}{:6.2f}{:6.2f}".format('test', cc1, mae1))
 
 
-# In[ ]:
+# In[23]:
 
 
 if gridsearch:
@@ -773,7 +782,7 @@ cc1 = scipy.stats.pearsonr(np.squeeze(y_test), np.squeeze(y_pred1))[0]
 print("{:<10}{:6.2f}{:6.2f}".format('test', cc1, mae1))
 
 
-# In[ ]:
+# In[24]:
 
 
 # Select best models according to scores
@@ -787,7 +796,7 @@ if save_model > 0:
 
 # ### Select best models according to scores
 
-# In[ ]:
+# In[25]:
 
 
 y_pred1 = model1.predict(X_test)
@@ -820,7 +829,7 @@ plt.savefig('plots/' + argv3, bbox_inches='tight')
 plt.show()
 
 
-# In[ ]:
+# In[26]:
 
 
 # (n, 1) -- (n,)
@@ -832,7 +841,7 @@ y_pred3 = np.squeeze(y_pred3)
 #y_pred1 = y_pred1.reshape(-1,1)
 
 
-# In[ ]:
+# In[28]:
 
 
 # Create scatter density plots for different models
@@ -848,7 +857,7 @@ z = gaussian_kde(xy)(xy)
 idx = z.argsort()
 x, y, z = x[idx], y[idx], z[idx]
 
-ax1.scatter(x, y, c=z, s=50, edgecolor='')
+ax1.scatter(x, y, c=z, s=50, edgecolor=None)
 ax1.set_xlim([0,35])
 ax1.set_ylim([0,35])
 ax1.set_aspect('equal', 'box')
@@ -868,7 +877,7 @@ z = gaussian_kde(xy)(xy)
 idx = z.argsort()
 x, y, z = x[idx], y[idx], z[idx]
 
-ax2.scatter(x, y, c=z, s=50, edgecolor='')
+ax2.scatter(x, y, c=z, s=50, edgecolor=None)
 ax2.set_xlim([0,35])
 ax2.set_ylim([0,35])
 ax2.set_aspect('equal', 'box')
@@ -889,7 +898,7 @@ idx = z.argsort()
 x, y, z = x[idx], y[idx], z[idx]
 
 ax3.plot([-100, 100],[-100, 100], ls=":")
-ax3.scatter(x, y, c=z, s=50, edgecolor='')
+ax3.scatter(x, y, c=z, s=50, edgecolor=None)
 ax3.set_xlim([0,35])
 ax3.set_ylim([0,35])
 ax3.set_aspect('equal', 'box')
@@ -922,7 +931,7 @@ plt.show()
 
 # #### Point-to-point comparison metrics
 
-# In[ ]:
+# In[36]:
 
 
 import sklearn
@@ -1028,15 +1037,15 @@ print('min($B_{z}$)','&','GBR','&','{:.2f}'.format(np.mean(y_pred3)),'&','{:.2f}
      '{:.2f}'.format(me3), '&', '{:.2f}'.format(mae3), '&', '{:.2f}'.format(rmse3), '&', '{:.2f}'.format(ss3), '&', '{:.2f}'.format(pcc3),'\\\\')
 
 # Save results as np array
-argv3='bz_{}h_error_measures'.format(feature_hours)  
+argv3='btot_{}h_error_measures'.format(feature_hours)  
 res_array = np.array([[me1, mae1, mse1, rmse1, ss1, pcc1], [me2, mae2, mse2, rmse2, ss2, pcc2], [me3, mae3, mse3, rmse3, ss3, pcc3]])
 np.save('mfr_results/' + argv3, res_array)
-np.save('mfr_results/' + 'bz_values', obs)
+np.save('mfr_results/' + 'btot_values', obs)
 
 
 # #### Binary metrics
 
-# In[ ]:
+# In[37]:
 
 
 # 2. Binary Metrics 
@@ -1145,7 +1154,7 @@ np.save('mfr_results/' + argv3, res_array)
 
 # #### Illustrate the effect of time window on the results
 
-# In[ ]:
+# In[38]:
 
 
 d_metrics_mae = {'lr': [], 'rfr': [], 'gbr': []}
@@ -1201,7 +1210,7 @@ plt.show()
 
 # ## 3. Real-world Applications
 
-# In[ ]:
+# In[39]:
 
 
 from matplotlib.dates import DateFormatter
@@ -1255,14 +1264,14 @@ def plot_all_mos(sat, n_ind, start_range, end_range, satname, varstr='max'):
     plt.show()
 
 
-# In[ ]:
+# In[40]:
 
 
 #y_pred = y_pred3
 #plot_all_mos(win, n_iwinind, 17, 20, 'Wind')
 
 
-# In[ ]:
+# In[41]:
 
 
 #y_pred = y_pred3
@@ -1272,4 +1281,10 @@ def plot_all_mos(sat, n_ind, start_range, end_range, satname, varstr='max'):
 #plot_all_mos(sta, n_istaind, start_range, end_range, 'STEREO-A')
 #start_range, end_range = len(win_test_ind) + len(sta_test_ind), len(test_ind)
 #plot_all_mos(stb, n_istbind, start_range, end_range, 'STEREO-B')
+
+
+# In[ ]:
+
+
+
 
