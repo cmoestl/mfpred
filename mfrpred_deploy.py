@@ -4,6 +4,7 @@
 # ### Real time deployment of the machine learning algorithms for predicting the magnetic flux rope structure in coronal mass ejections
 # 
 # This is a code adapted for real time Bz prediction from the Reiss et al. 2021 Space Weather paper.
+# https://agupubs.onlinelibrary.wiley.com/doi/10.1029/2021SW002859
 # 
 # This notebook is used for real time deployment.
 # 
@@ -14,12 +15,11 @@
 # ### Ideas
 # 
 # - deploy in real time for data files for STEREO-A and NOAA RTSW  under folder data_path:
-# - stereoa_beacon_gsm_last_35days_now.p
-# - noaa_rtsw_last_35files_now.p
-# - read in ML model trained with the notebooks mfrpred_real_bz, mfpred_real_btot
+# "stereoa_beacon_gsm_last_35days_now.p" and "noaa_rtsw_last_35files_now.p"
+# - read in ML model trained with the notebooks mfrpred_real_bz (done), mfpred_real_btot (need to update)
 # 
 # - continous deployment, look at results during CMEs
-# - progression of results in real time as more of the CME is seen
+# - assess progression of results in real time as more of the CME is seen
 # 
 # 
 # 
@@ -31,7 +31,7 @@
 # (3) Conrad Observatory, GeoSphere Austria
 # 
 
-# In[1]:
+# In[24]:
 
 
 # Python Modules and Packages
@@ -71,21 +71,7 @@ from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 import warnings
 warnings.filterwarnings('ignore')
 
-# Print versions
-print('Current Versions')
-import matplotlib
-print(np.__version__)#==1.17.2
-print(matplotlib.__version__)#3.1.2
-print(scipy.__version__)#1.3.1
-print(pd.__version__)#0.25.3
-import sklearn
-print(sklearn.__version__)#0.20.3
-print(sns.__version__)#0.9.0
-import PIL
-print(PIL.__version__)#8.1.2
-
 os.system('jupyter nbconvert --to script mfrpred_deploy.ipynb')    
-
 
 #get data paths
 if sys.platform == 'linux': 
@@ -106,9 +92,9 @@ if sys.platform =='darwin':
 
 
 
-# #### load real time data
+# ## load real time data
 
-# In[2]:
+# In[25]:
 
 
 filenoaa='noaa_rtsw_last_35files_now.p'
@@ -128,7 +114,7 @@ ind2=np.where(sta.time > start)[0][0]
 sta=sta[ind2:]
 
 
-# In[3]:
+# In[26]:
 
 
 ###plot NOAA
@@ -159,11 +145,57 @@ plt.grid(True)  # Adding a grid
 plt.xlim(start, end)
 
 
+# ### load ML model
+
+# In[33]:
+
+
+#what the model numbers mean
+#model1 = models['lr'] 
+#model2 = models['rfr'] 
+#model3 = models['gbr'] 
+
+feature_hours=10
+[model1,model2,model3]=pickle.load(open('trained_models/bz_'+str(feature_hours)+'h_model.p','rb'))
+
+#model1.predict()
+model2
+
+
+#y_pred1 = model1.predict(X_test)
+
+#y_pred1 sind die Bz predictions
+
+
+
 # ### Apply ML model
 # 
+
+# In[28]:
+
+
+## how to apply, first calculate features from current data? and then put into model
+
+#feature space - map to model, get output
+
+
+
+# ### Make output data files and plots
 
 # In[ ]:
 
 
-##load ML model
+
+
+
+# In[ ]:
+
+
+
+
+
+# In[ ]:
+
+
+
 

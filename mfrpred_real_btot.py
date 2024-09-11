@@ -3,16 +3,57 @@
 
 # ### Machine learning for predicting the magnetic flux rope structure in coronal mass ejections (Btotal)
 # 
+# 
+# 
+# adapted from the paper Reiss et al. 2021 
+# https://agupubs.onlinelibrary.wiley.com/doi/10.1029/2021SW002859
+# 
+# 
 # Coronal mass ejections continually interact with Earth's space weather environment driving geomagnetic storm activity. The severity of geomagnetic storms is determined by the magnetic flux rope structure in the coronal mass ejections. Predicting the flux rope structure is however an open question in the community. Here we study if the in situ signature in the sheath region contains sufficient information for predicting the magnetic flux rope field in coronal mass ejections. Further, we quantify how much time is needed inside the flux rope to predict the mean total magnetic field of the flux rope with high accuracy. To do so, we use widely-applied machine learning algorithms such as linear regression, lars lasso, and random forest. We train, test, and validate these algorithms on coronal mass ejections in retrospective real-time mode for the Wind, Stereo-A, and Stereo-B mission data in the HELCATS CME catalog. 
 # 
-# #### Contributors: 
-# M.A. Reiss, C. Möstl, R.L. Bailey, and U. Amerstorfer (NASA CCMC, Austrian Space Weather Office, Conrad Observatory, GeoSphere Austria)
+# #### Authors: 
+# M.A. Reiss (1), C. Möstl (2), R.L. Bailey (3), and U. Amerstorfer (2), Emma Davies (2), Eva Weiler (2)
+# 
+# (1) NASA CCMC, 
+# (2) Austrian Space Weather Office, GeoSphere Austria
+# (3) Conrad Observatory, GeoSphere Austria
 # 
 # #### Solar wind data:
-# Copy Version 8 from https://figshare.com/articles/dataset/Solar_wind_in_situ_data_suitable_for_machine_learning_python_numpy_arrays_STEREO-A_B_Wind_Parker_Solar_Probe_Ulysses_Venus_Express_MESSENGER/12058065
+# Copy Version 10 from https://figshare.com/articles/dataset/Solar_wind_in_situ_data_suitable_for_machine_learning_python_numpy_arrays_STEREO-A_B_Wind_Parker_Solar_Probe_Ulysses_Venus_Express_MESSENGER/12058065
 # into the folder /data.
+# 
+# ### Update
+# last update 2024 Sep 11.
+# 
+# ### Issues
+# 
+# 
+# ### Issues
+# 
+# - update insitu for ML data files until 2024 with new matplotlib date format, much more events! Wind from 1995
+# - retrain the model with new ICMECAT and new data files with this notebook, for 1, 2,3,4, 5, 6,7,8, 9, 10, 12, 15 hours
+# - read the trained model file in with mfrpred_deploy.ipynb and apply to real time data
 
 # In[1]:
+
+
+#### control parameters
+
+# Set time window for features in hours
+feature_hours = 8 #10
+
+# > 0 if you want to save the 3 models under folder trained_models/
+save_model=1 
+
+# Decide if you want to include the sheath region. 
+use_sheath = True
+
+#list for last plot showing progression with window, which hours after sheath were already computed, look into folder mfr_results
+
+th_list=[1,2,5,8,10]
+
+
+# In[2]:
 
 
 # Python Modules and Packages
@@ -20,6 +61,7 @@ import os
 import sys
 import matplotlib.pyplot as plt
 from matplotlib.dates import date2num, num2date
+import matplotlib.dates as mdates
 from matplotlib import cm
 import numpy as np
 import pickle
@@ -49,15 +91,32 @@ from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 # Don't print warnings
 import warnings
 warnings.filterwarnings('ignore')
+os.system('jupyter nbconvert --to script mfrpred_real_btot.ipynb')    
 
-os.system('jupyter nbconvert --to script mfrpred_mreiss_btot.ipynb')   
+
+#get data paths
+if sys.platform == 'linux': 
+    
+    from config_server import data_path
+    from config_server import noaa_path
+    from config_server import wind_path
+    from config_server import stereoa_path
+    from config_server import data_path_ml
+    
+if sys.platform =='darwin':  
+
+    from config_local import data_path
+    from config_local import noaa_path
+    from config_local import wind_path
+    from config_local import stereoa_path
+    from config_local import data_path_ml
 
 
 # ## 1. Data preparation
 
 # #### File and folder variables:
 
-# In[2]:
+# In[3]:
 
 
 # Make plots and results folders
@@ -75,12 +134,12 @@ savepath_sta = 'sta_features.p'
 savepath_stb = 'stb_features.p'
 
 
-# #### Load HELCATS ICME data catalog
+# #### Load HELIO4CAST ICME data catalog
 
-# In[3]:
+# In[4]:
 
 
-[ic,header,parameters] = pickle.load(open('data/HELIO4CAST_ICMECAT_v21_pandas.p', "rb" ))
+[ic,header,parameters] = pickle.load(open('data/ICMECAT/HELIO4CAST_ICMECAT_v22_pandas.p', "rb" ))
 
 # Spacecraft
 isc = ic.loc[:,'sc_insitu'] 
@@ -97,21 +156,6 @@ mo_start_time_num = date2num(np.array(mo_start_time))
 mo_end_time = ic.loc[:,'mo_end_time']
 mo_end_time_num = date2num(np.array(mo_end_time))
 
-
-# #### Load spacecraft data
-
-# In[4]:
-
-
-# Load Wind data
-[win, winheader] = pickle.load(open("data/wind_1995_2021_heeq_ndarray.p", "rb"))
-
-# Load STEREO-A data
-[sta, atta] = pickle.load(open("data/stereoa_2007_2021_sceq_ndarray.p", "rb"))
-
-# Load STEREO-B data
-[stb, attb, stbheader] = pickle.load(open("data/stereob_2007_2014_sceq_ndarray.p", "rb"))
-
 #get indices for each target
 wini=np.where(ic.sc_insitu=='Wind')[0]
 stai=np.where(ic.sc_insitu=='STEREO-A')[0]
@@ -122,6 +166,30 @@ bepii=np.where(ic.sc_insitu=='BepiColombo')[0]
 ulyi=np.where(ic.sc_insitu=='Ulysses')[0]
 messi=np.where(ic.sc_insitu=='Messenger')[0]
 vexi=np.where(ic.sc_insitu=='VEX')[0]
+
+
+# #### Load spacecraft data
+
+# In[5]:
+
+
+# Load Wind data
+[win, winheader] = pickle.load(open("data/insitu/wind_2007_2021_heeq_ndarray.p", "rb"))
+
+# Load STEREO-A data
+[sta, atta] = pickle.load(open("data/insitu/stereoa_2007_2021_sceq_ndarray.p", "rb"))
+
+# Load STEREO-B data
+[stb, attb, stbheader] = pickle.load(open("data/insitu/stereob_2007_2014_sceq_ndarray.p", "rb"))
+
+
+## quick fix for dates - need to make new data files for ML with heliocats package
+
+win['time']=win['time'] + mdates.date2num(np.datetime64('0000-12-31'))
+sta['time']=sta['time'] + mdates.date2num(np.datetime64('0000-12-31'))
+stb['time']=stb['time'] + mdates.date2num(np.datetime64('0000-12-31'))
+
+plt.plot_date(stb['time'],stb['bz'],'k-')
 
 
 # #### Study only events with a sheath region
@@ -158,14 +226,8 @@ print('percentage of all events',np.round((n_iwinind.shape[0] + n_istaind.shape[
 
 # #### Timing windows for features and labels
 
-# In[8]:
+# In[7]:
 
-
-# Set time window for features in hours
-feature_hours = 0 #10
-
-# Decide if you want to include the sheath region. 
-use_sheath = True
 
 if use_sheath:
     print("Option 1: Use MFR and sheath data for features")
@@ -184,7 +246,7 @@ label_end = mo_end_time_num
 
 # #### Functions to compute features and labels
 
-# In[9]:
+# In[8]:
 
 
 # Compute mean, max and std-dev in feature time window
@@ -249,7 +311,7 @@ def get_label(sc_time, start_time, end_time, sc_ind, sc_label, label_type="max")
 
 # #### Create data frame for features and labels
 
-# In[20]:
+# In[ ]:
 
 
 #contains all events that are finally selected
@@ -355,7 +417,7 @@ else:
 
 # #### Clean the data frame by removing NaNs 
 
-# In[21]:
+# In[ ]:
 
 
 #get original indices of the 362 events
@@ -371,7 +433,7 @@ print(len(dfwin)+len(dfsta)+len(dfstb))
 print(len(win_select_ind)+len(sta_select_ind)+len(stb_select_ind))
 
 
-# In[22]:
+# In[ ]:
 
 
 print(len(dfwin))
@@ -414,7 +476,7 @@ n_all=np.hstack([win_select_ind1,sta_select_ind1,stb_select_ind1])
 print(len(n_all))
 
 
-# In[23]:
+# In[ ]:
 
 
 ##reduce dataframes finally to selected events
@@ -423,7 +485,7 @@ dfsta=dfsta1
 dfstb=dfstb1
 
 
-# In[24]:
+# In[ ]:
 
 
 print('Statistics for the final '+str(len(n_all))+' selected events with sheath:')
@@ -453,7 +515,7 @@ print("std MO Bzmin   : {:.2f} nT".format((ic.loc[n_all,'mo_bzmin'].std())))
 print()
 
 
-# In[33]:
+# In[ ]:
 
 
 df = pd.concat([dfwin, dfsta, dfstb])
@@ -463,7 +525,7 @@ pickle.dump(df, open('riley2022/features_521_events_btot_target.p', "wb"))
 df
 
 
-# In[25]:
+# In[ ]:
 
 
 """#Some tests...
@@ -494,7 +556,7 @@ print(np.nanmin(prop_event)/np.nanmax(prop_event))
 
 # #### Split data frame into training and testing
 
-# In[13]:
+# In[ ]:
 
 
 # Testing data size in percent
@@ -528,7 +590,7 @@ test_ind = test.index.to_numpy()
 
 # #### Feature selection
 
-# In[14]:
+# In[ ]:
 
 
 # Select features
@@ -559,7 +621,7 @@ pickle.dump([n_iwinind, n_istaind, n_istbind,
 
 # #### Select algorithms for machine learning
 
-# In[15]:
+# In[ ]:
 
 
 # Define machine learning models
@@ -592,7 +654,7 @@ def evaluate_forecast(model, X, y, y_predict):
 
 # #### Test different machine learning algorithms
 
-# In[16]:
+# In[ ]:
 
 
 # Use pickle to load training and testing data
@@ -624,7 +686,7 @@ for name, model in models.items():
 
 # #### Validation of machine learning models
 
-# In[17]:
+# In[ ]:
 
 
 # Validate machine learning model on test data
@@ -638,7 +700,7 @@ for name, model in models.items():
 
 # #### Optimising model hyperparameters
 
-# In[18]:
+# In[ ]:
 
 
 # Set to True when you want to redo the Hyperparameter tuning - takes a few minutes
@@ -647,7 +709,7 @@ gridsearch = False
 from sklearn.model_selection import RandomizedSearchCV
 
 
-# In[19]:
+# In[ ]:
 
 
 if gridsearch:
@@ -679,7 +741,7 @@ cc1 = scipy.stats.pearsonr(np.squeeze(y_test), np.squeeze(y_pred1))[0]
 print("{:<10}{:6.2f}{:6.2f}".format('test', cc1, mae1))
 
 
-# In[20]:
+# In[ ]:
 
 
 if gridsearch:
@@ -711,7 +773,7 @@ cc1 = scipy.stats.pearsonr(np.squeeze(y_test), np.squeeze(y_pred1))[0]
 print("{:<10}{:6.2f}{:6.2f}".format('test', cc1, mae1))
 
 
-# In[21]:
+# In[ ]:
 
 
 # Select best models according to scores
@@ -719,12 +781,18 @@ model1 = models['lr']
 model2 = models['rfr'] 
 model3 = models['gbr'] 
 
+if save_model > 0:
+    pickle.dump([model1,model2,model3],open('trained_models/btot_'+str(feature_hours)+'h_model.p','wb'))
+
+
+# ### Select best models according to scores
+
+# In[ ]:
+
+
 y_pred1 = model1.predict(X_test)
 y_pred2 = model2.predict(X_test)
 y_pred3 = model3.predict(X_test)
-
-
-# In[22]:
 
 
 sns.set_context("talk")     
@@ -752,7 +820,7 @@ plt.savefig('plots/' + argv3, bbox_inches='tight')
 plt.show()
 
 
-# In[23]:
+# In[ ]:
 
 
 # (n, 1) -- (n,)
@@ -764,7 +832,7 @@ y_pred3 = np.squeeze(y_pred3)
 #y_pred1 = y_pred1.reshape(-1,1)
 
 
-# In[24]:
+# In[ ]:
 
 
 # Create scatter density plots for different models
@@ -854,7 +922,7 @@ plt.show()
 
 # #### Point-to-point comparison metrics
 
-# In[25]:
+# In[ ]:
 
 
 import sklearn
@@ -968,7 +1036,7 @@ np.save('mfr_results/' + 'bz_values', obs)
 
 # #### Binary metrics
 
-# In[26]:
+# In[ ]:
 
 
 # 2. Binary Metrics 
@@ -1077,13 +1145,13 @@ np.save('mfr_results/' + argv3, res_array)
 
 # #### Illustrate the effect of time window on the results
 
-# In[29]:
+# In[ ]:
 
 
 d_metrics_mae = {'lr': [], 'rfr': [], 'gbr': []}
 d_metrics_pcc = {'lr': [], 'rfr': [], 'gbr': []}
 
-th_list = np.arange(0, 16)
+#th_list = np.arange(0, 16)
 for idx in th_list:
     [res_lr,res_rfr,res_gbr] = np.load('mfr_results/btot_{}h_error_measures.npy'.format(idx))
     # me=[0], mae=[1], mse=[2], rmse=[3], ss=[4], pcc=[5]
@@ -1133,7 +1201,7 @@ plt.show()
 
 # ## 3. Real-world Applications
 
-# In[30]:
+# In[ ]:
 
 
 from matplotlib.dates import DateFormatter
@@ -1187,14 +1255,14 @@ def plot_all_mos(sat, n_ind, start_range, end_range, satname, varstr='max'):
     plt.show()
 
 
-# In[32]:
+# In[ ]:
 
 
 #y_pred = y_pred3
 #plot_all_mos(win, n_iwinind, 17, 20, 'Wind')
 
 
-# In[32]:
+# In[ ]:
 
 
 #y_pred = y_pred3

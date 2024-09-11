@@ -3,6 +3,10 @@
 
 # ### Machine learning for predicting the magnetic flux rope structure in coronal mass ejections (Bz)
 # 
+# adapted from the paper Reiss et al. 2021 
+# https://agupubs.onlinelibrary.wiley.com/doi/10.1029/2021SW002859
+# 
+# 
 # Coronal mass ejections continually interact with Earth's space weather environment driving geomagnetic storm activity. The severity of geomagnetic storms is determined by the magnetic flux rope structure in the coronal mass ejections. Predicting the flux rope structure is however an open question in the community. Here we study if the in situ signature in the sheath region contains sufficient information for predicting the magnetic flux rope field in coronal mass ejections. Further, we quantify how much time is needed inside the flux rope to predict the mean total magnetic field of the flux rope with high accuracy. To do so, we use widely-applied machine learning algorithms such as linear regression, lars lasso, and random forest. We train, test, and validate these algorithms on coronal mass ejections in retrospective real-time mode for the Wind, Stereo-A, and Stereo-B mission data in the HELCATS CME catalog. 
 # 
 # #### Authors: 
@@ -22,8 +26,8 @@
 # ### Issues
 # 
 # - update insitu for ML data files until 2024 with new matplotlib date format, much more events! Wind from 1995
-# - retrain the model with new ICMECAT, new data files
-# - write trained model into pickle, read in with mfrpred_deploy.ipynb
+# - retrain the model with new ICMECAT and new data files with this notebook, for 1, 2,3,4, 5, 6,7,8, 9, 10, 12, 15 hours
+# - read the trained model file in with mfrpred_deploy.ipynb and apply to real time data
 # 
 
 # In[1]:
@@ -32,10 +36,17 @@
 #### control parameters
 
 # Set time window for features in hours
-feature_hours = 0 #10
+feature_hours = 2 #10
+
+# > 0 if you want to save the 3 models under folder trained_models/
+save_model=1 
 
 # Decide if you want to include the sheath region. 
 use_sheath = True
+
+#list for last plot showing progression with window, which hours after sheath were already computed, look into folder mfr_results
+
+th_list=[1,5,10]
 
 
 # In[2]:
@@ -190,13 +201,14 @@ win['time']=win['time'] + mdates.date2num(np.datetime64('0000-12-31'))
 sta['time']=sta['time'] + mdates.date2num(np.datetime64('0000-12-31'))
 stb['time']=stb['time'] + mdates.date2num(np.datetime64('0000-12-31'))
 
+plt.plot_date(stb['time'],stb['bz'],'k-')
 
 
 # #### Convert spacecraft data to dataframe
 # 
 # add vt*bz and bt**2
 
-# In[11]:
+# In[6]:
 
 
 # Wind
@@ -239,7 +251,7 @@ stb = stb_data
 
 # #### Study only events with a sheath region
 
-# In[12]:
+# In[7]:
 
 
 # Event indices from STEREO and Wind
@@ -272,7 +284,7 @@ print('Percentage of all events',np.round((n_iwinind.shape[0] + n_istaind.shape[
 
 # #### Timing windows for features and labels
 
-# In[13]:
+# In[8]:
 
 
 if use_sheath:
@@ -292,7 +304,7 @@ label_end = mo_end_time_num
 
 # #### Functions to compute features and labels
 
-# In[14]:
+# In[9]:
 
 
 # Compute mean, max and std-dev in feature time window
@@ -357,7 +369,7 @@ def get_label(sc_time, start_time, end_time, sc_ind, sc_label, label_type="max")
 
 # #### Create data frame for features and labels
 
-# In[15]:
+# In[ ]:
 
 
 #contains all events that are finally selected
@@ -463,7 +475,7 @@ else:
 
 # #### Clean the data frame by removing NaNs 
 
-# In[16]:
+# In[ ]:
 
 
 #get original indices of the 362 events
@@ -479,7 +491,7 @@ print(len(dfwin)+len(dfsta)+len(dfstb))
 print(len(win_select_ind)+len(sta_select_ind)+len(stb_select_ind))
 
 
-# In[17]:
+# In[ ]:
 
 
 print(len(dfwin))
@@ -495,7 +507,7 @@ print("Total number of events  ", len(dfwin)+len(dfsta)+len(dfstb))
 print()
 
 
-# In[18]:
+# In[ ]:
 
 
 # Remove NaN's in data frames
@@ -526,7 +538,7 @@ n_all=np.hstack([win_select_ind1,sta_select_ind1,stb_select_ind1])
 print(len(n_all))
 
 
-# In[14]:
+# In[ ]:
 
 
 # Define final dataframes
@@ -537,7 +549,7 @@ dfstb=dfstb1
 
 # ## Figure 1: ICME catalog 
 
-# In[15]:
+# In[ ]:
 
 
 #markersize
@@ -596,7 +608,7 @@ print('Total:',np.size(win_select_ind1)+np.size(sta_select_ind1)+np.size(stb_sel
 
 # ## Figure 2: Parameter distribution plot 
 
-# In[16]:
+# In[ ]:
 
 
 sns.set_context("talk")     
@@ -664,7 +676,7 @@ argv3 ='fig2_dist.png'
 plt.savefig('plots/' + argv3)
 
 
-# In[17]:
+# In[ ]:
 
 
 print('Statistics for the final '+str(len(n_all))+' selected events with sheath:')
@@ -695,7 +707,7 @@ print("std MO Bzmin   : {:.2f} nT".format((ic.loc[n_all,'mo_bzmin'].std())))
 print()
 
 
-# In[18]:
+# In[ ]:
 
 
 df = pd.concat([dfwin, dfsta, dfstb])
@@ -705,7 +717,7 @@ pickle.dump(df, open('riley2022/features_521_events_bz_target.p', "wb"))
 df
 
 
-# In[19]:
+# In[ ]:
 
 
 df2=pickle.load(open('riley2022/features_521_events.p', "rb"))
@@ -738,7 +750,7 @@ df2=pickle.load(open('riley2022/features_521_events.p', "rb"))
 
 # #### Split data frame into training and testing
 
-# In[20]:
+# In[ ]:
 
 
 # Testing data size in percent
@@ -951,21 +963,28 @@ cc1 = scipy.stats.pearsonr(np.squeeze(y_test), np.squeeze(y_pred1))[0]
 print("{:<10}{:6.2f}{:6.2f}".format('test', cc1, mae1))
 
 
+# ### Save trained models for use in real time
+
 # In[ ]:
 
 
-# Select best models according to scores
 model1 = models['lr'] 
 model2 = models['rfr'] 
 model3 = models['gbr'] 
 
-y_pred1 = model1.predict(X_test)
-y_pred2 = model2.predict(X_test)
-y_pred3 = model3.predict(X_test)
+if save_model > 0:
+    pickle.dump([model1,model2,model3],open('trained_models/bz_'+str(feature_hours)+'h_model.p','wb'))
 
+
+# ### Select best models according to scores
 
 # In[ ]:
 
+
+#test with training data
+y_pred1 = model1.predict(X_test)
+y_pred2 = model2.predict(X_test)
+y_pred3 = model3.predict(X_test)
 
 importances = model3.feature_importances_
 indices = np.argsort(importances)
@@ -1321,7 +1340,9 @@ np.save('mfr_results/' + argv3, res_array)
 d_metrics_mae = {'lr': [], 'rfr': [], 'gbr': []}
 d_metrics_pcc = {'lr': [], 'rfr': [], 'gbr': []}
 
-th_list = np.arange(0, 16)
+#th_list = np.arange(1, 16)
+
+
 for idx in th_list:
     [res_lr,res_rfr,res_gbr] = np.load('mfr_results/bz_{}h_error_measures.npy'.format(idx))
     # me=[0], mae=[1], mse=[2], rmse=[3], ss=[4], pcc=[5]
@@ -1351,7 +1372,7 @@ ax2.plot(th_list, d_metrics_pcc['gbr'], color='green', label='GBR', marker='.')
 ax2.set_xlabel('Time elapsed from MO start [h]', fontsize=14)
 ax2.set_ylabel('PCC for min(B$_{\mathrm{z}}$) prediction [nT]', fontsize=14)
 ax2.set_ylim([0.55,0.90])
-ax1.set_ylim([2.3,3.8])
+ax1.set_ylim([2.3,4.4])
 ax2.legend(loc=4,fontsize=16)
 ax2.set_title('min(B$_{\mathrm{z}}$)')
 plt.subplots_adjust(wspace=0.3)
