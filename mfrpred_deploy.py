@@ -22,6 +22,9 @@
 # - assess progression of results in real time as more of the CME is seen
 # - needs different trained model for each timestep, i.e. for different hours after sheath and MFR entry?
 # 
+# - add general Bz distribution plots here at the end
+# 
+# 
 # ### Future
 # - forecast of the cumulative southward Bz during a geomagnetic storm?
 # - start at time of shock, and then decrease the error bars with time
@@ -41,10 +44,25 @@
 # (3) Conrad Observatory, GeoSphere Austria
 # 
 
-# In[34]:
+# In[118]:
 
 
-# Python Modules and Packages
+########### controls
+
+print()
+print('started mfrpred_deploy.py')
+
+
+
+
+################
+
+import time
+
+#test execution times
+t0all = time.time()
+
+
 import os
 import sys
 import copy
@@ -104,7 +122,7 @@ if sys.platform =='darwin':
 
 # ## load real time data
 
-# In[35]:
+# In[110]:
 
 
 filenoaa='noaa_rtsw_last_35files_now.p'
@@ -112,6 +130,8 @@ filenoaa='noaa_rtsw_last_35files_now.p'
 
 file_sta_beacon_gsm='stereoa_beacon_gsm_last_35days_now.p'  
 [sta,hsta]=pickle.load(open(data_path+file_sta_beacon_gsm, "rb" ) )  
+
+print('real time NOAA RTSW and STEREO-A data loaded')
 
 #cutout last 10 days
 start=datetime.datetime.utcnow() - datetime.timedelta(days=10)
@@ -124,7 +144,7 @@ ind2=np.where(sta.time > start)[0][0]
 sta=sta[ind2:]
 
 
-# In[36]:
+# In[111]:
 
 
 ###plot NOAA
@@ -135,7 +155,6 @@ plt.plot(noaa.time,noaa.bt,'-k')
 plt.title("NOAA RTSW")  # Adding a title
 plt.xlabel("time")  # Adding X axis label
 plt.ylabel("B [nT]")  # Adding Y axis label
-plt.legend()  # Adding a legend
 plt.grid(True)  # Adding a grid
 
 plt.xlim(start, end)
@@ -149,19 +168,19 @@ plt.plot(sta.time,sta.bt,'-k')
 plt.title("STEREO-A beacon")  # Adding a title
 plt.xlabel("time")  # Adding X axis label
 plt.ylabel("B [nT]")  # Adding Y axis label
-plt.legend()  # Adding a legend
 plt.grid(True)  # Adding a grid
 
 plt.xlim(start, end)
 
 
-# In[ ]:
+# In[112]:
 
 
+sns.set_context("talk")     
+sns.set_style('whitegrid')
 
-
-
-# In[38]:
+fig=plt.figure(figsize=(12,6),dpi=100)
+#ax1 = plt.subplot(111) 
 
 
 #cutout last 10 hours, e.g. sheath is over and flux rope starts
@@ -182,7 +201,6 @@ plt.plot(noaa_cut.time,noaa_cut.bt,'-k')
 plt.title("NOAA RTSW")  # Adding a title
 plt.xlabel("time")  # Adding X axis label
 plt.ylabel("B [nT]")  # Adding Y axis label
-plt.legend()  # Adding a legend
 plt.grid(True)  # Adding a grid
 
 plt.xlim(start, end)
@@ -196,7 +214,6 @@ plt.plot(sta_cut.time,sta_cut.bt,'-k')
 plt.title("STEREO-A beacon")  # Adding a title
 plt.xlabel("time")  # Adding X axis label
 plt.ylabel("B [nT]")  # Adding Y axis label
-plt.legend()  # Adding a legend
 plt.grid(True)  # Adding a grid
 
 plt.xlim(start, end)
@@ -205,7 +222,7 @@ plt.xlim(start, end)
 
 # ### load ML model
 
-# In[39]:
+# In[113]:
 
 
 #what the model numbers mean
@@ -215,6 +232,10 @@ plt.xlim(start, end)
 
 feature_hours=10
 [model1,model2,model3]=pickle.load(open('trained_models/bz_'+str(feature_hours)+'h_model.p','rb'))
+
+
+print()
+print('ML model loaded')
 
 #model1.predict()
 model2
@@ -229,13 +250,15 @@ model2
 # ### Apply ML model
 # 
 
-# In[40]:
+# In[114]:
 
 
 ## how to apply, first calculate features from current data? and then put into model
 
 #feature space - map to model, get output
 
+print()
+print('ML model to be run on real time data')
 
 
 # ### Make output data files and plots
@@ -243,7 +266,9 @@ model2
 # In[ ]:
 
 
-
+print()
+print('results')
+print()
 
 
 # In[ ]:
@@ -254,6 +279,77 @@ model2
 
 # ### General Bz overview plots
 
+# In[115]:
+
+
+##load ICME catalog
+
+[ic,header,parameters] = pickle.load(open('data/ICMECAT/HELIO4CAST_ICMECAT_v22_pandas.p', "rb" ))
+
+print()
+print('ICMECAT loaded')
+
+# Spacecraft
+isc = ic.loc[:,'sc_insitu'] 
+
+# Shock arrival or density enhancement time
+icme_start_time = ic.loc[:,'icme_start_time']
+icme_start_time_num = date2num(np.array(icme_start_time))
+
+# Start time of the magnetic obstacle (mo)
+mo_start_time = ic.loc[:,'mo_start_time']
+mo_start_time_num = date2num(np.array(mo_start_time))
+
+# End time of the magnetic obstacle (mo)
+mo_end_time = ic.loc[:,'mo_end_time']
+mo_end_time_num = date2num(np.array(mo_end_time))
+
+#get indices for each target
+wini=np.where(ic.sc_insitu=='Wind')[0]
+stai=np.where(ic.sc_insitu=='STEREO-A')[0]
+stbi=np.where(ic.sc_insitu=='STEREO-B')[0]
+pspi=np.where(ic.sc_insitu=='PSP')[0]
+soloi=np.where(ic.sc_insitu=='SolarOrbiter')[0]
+bepii=np.where(ic.sc_insitu=='BepiColombo')[0]
+ulyi=np.where(ic.sc_insitu=='Ulysses')[0]
+messi=np.where(ic.sc_insitu=='Messenger')[0]
+vexi=np.where(ic.sc_insitu=='VEX')[0]
+
+
+# In[116]:
+
+
+ic.keys()
+
+
+# In[117]:
+
+
+##plot for minimum Bz vs time
+
+sns.set_context("talk")     
+sns.set_style('whitegrid')
+
+fig=plt.figure(figsize=(12,6),dpi=100)
+ax1 = plt.subplot(111) 
+
+ax1.plot(ic['icme_start_time'][wini],ic['mo_bzmin'][wini],'og',markersize=3,label='Wind ICME min(Bz)')
+ax1.plot(ic['icme_start_time'][stai],ic['mo_bzmin'][stai],'or',markersize=3,label='STEREO-A ICME min(Bz)')
+ax1.plot(ic['icme_start_time'][stbi],ic['mo_bzmin'][stbi],'ob',markersize=3,label='STEREO-B ICME min(Bz)')
+ax1.set_ylim(-100,30)
+plt.legend(fontsize=10,loc=2)
+plt.tight_layout()
+plt.title('Bz in ICME magnetic obstacles for Wind, STEREO-A/B  ICMECAT mo_bzmin')
+plt.savefig('plots/icme_bz_time.png')
+
+
+print()
+print('saved plots/icme_bz_time.png')
+print()
+print()
+
+
+
 # In[ ]:
 
 
@@ -269,29 +365,12 @@ model2
 # In[ ]:
 
 
+t1all = time.time()
 
-
-
-# In[ ]:
-
-
-
-
-
-# In[ ]:
-
-
-
-
-
-# In[ ]:
-
-
-
-
-
-# In[ ]:
-
-
-
+print(' ')
+print(' ')
+print(' ')
+print('------------------')
+print('Runtime for full high frequency data update:', np.round((t1all-t0all)/60,2), 'minutes')
+print('------------------')
 
